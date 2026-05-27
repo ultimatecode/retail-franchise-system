@@ -9,3 +9,13 @@ export function getSalesStats() {
     method: 'get'
   })
 }
+
+/**
+ * 获取个人销售数据
+ */
+export function getMySalesStats() {
+  return request({
+    url: '/stats/my-sales',
+    method: 'get'
+  })
+}

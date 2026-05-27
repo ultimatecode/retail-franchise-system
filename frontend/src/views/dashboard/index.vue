@@ -98,42 +98,32 @@
           </div>
 
           <div class="info-card">
-            <div class="card-icon">
-              <el-icon><OfficeBuilding /></el-icon>
+            <div class="card-icon" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+              <el-icon><TrendCharts /></el-icon>
             </div>
             <div class="card-content">
-              <div class="card-label">部门ID</div>
-              <div class="card-value">{{ userStore.userInfo?.dept_id || '-' }}</div>
+              <div class="card-label">本月销售目标</div>
+              <div class="card-value">¥{{ formatMoney(personalStats.monthTarget) }}</div>
             </div>
           </div>
 
           <div class="info-card">
-            <div class="card-icon">
-              <el-icon><UserFilled /></el-icon>
+            <div class="card-icon" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+              <el-icon><DataLine /></el-icon>
             </div>
             <div class="card-content">
-              <div class="card-label">用户角色</div>
-              <div class="card-value">{{ userClassText }}</div>
+              <div class="card-label">本月销售额</div>
+              <div class="card-value">¥{{ formatMoney(personalStats.monthSales) }}</div>
             </div>
           </div>
 
           <div class="info-card">
-            <div class="card-icon">
-              <el-icon><UserFilled /></el-icon>
+            <div class="card-icon" style="background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);">
+              <el-icon><DataAnalysis /></el-icon>
             </div>
             <div class="card-content">
-              <div class="card-label">职位</div>
-              <div class="card-value">{{ userStore.userInfo?.position_name || '-' }}</div>
-            </div>
-          </div>
-
-          <div class="info-card">
-            <div class="card-icon">
-              <el-icon><CircleCheck /></el-icon>
-            </div>
-            <div class="card-content">
-              <div class="card-label">账户状态</div>
-              <div class="card-value" :class="statusClass">{{ userStatusText }}</div>
+              <div class="card-label">本年销售额</div>
+              <div class="card-value">¥{{ formatMoney(personalStats.yearSales) }}</div>
             </div>
           </div>
         </div>
@@ -207,7 +197,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { getSalesStats } from '@/api/stats'
+import { getSalesStats, getMySalesStats } from '@/api/stats'
 import dayjs from 'dayjs'
 
 const router = useRouter()
@@ -222,24 +212,15 @@ const stats = ref({
   todayOrders: 0
 })
 
-const userStatusMap = {
-  0: { text: '已禁用', class: 'disabled' },
-  1: { text: '正常', class: 'normal' },
-  2: { text: '未激活', class: 'inactive' }
-}
+// 个人销售数据
+const personalStats = ref({
+  monthTarget: 0,
+  monthSales: 0,
+  yearSales: 0
+})
 
 const currentDate = computed(() => {
   return dayjs().format('YYYY年MM月DD日')
-})
-
-const userStatusText = computed(() => {
-  const status = userStore.userInfo?.user_status
-  return userStatusMap[status]?.text || '未知'
-})
-
-const statusClass = computed(() => {
-  const status = userStore.userInfo?.user_status
-  return userStatusMap[status]?.class || ''
 })
 
 const formatMoney = (value) => {
@@ -273,6 +254,19 @@ const loadStats = async () => {
   }
 }
 
+const loadPersonalStats = async () => {
+  try {
+    const data = await getMySalesStats()
+    personalStats.value = {
+      monthTarget: data.month_target,
+      monthSales: data.month_sales,
+      yearSales: data.year_sales
+    }
+  } catch (error) {
+    console.error('获取个人销售数据失败', error)
+  }
+}
+
 const handleLogout = () => {
   userStore.logout()
   router.push('/login')
@@ -280,6 +274,7 @@ const handleLogout = () => {
 
 onMounted(() => {
   loadStats()
+  loadPersonalStats()
 })
 </script>
 
