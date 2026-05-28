@@ -136,7 +136,7 @@
           <span>快捷操作</span>
         </div>
         <div class="action-cards">
-          <div class="action-card" style="--delay: 0s">
+          <div class="action-card" style="--delay: 0s" @click="router.push('/products')">
             <div class="action-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
               <el-icon><Goods /></el-icon>
             </div>
@@ -159,23 +159,23 @@
           </div>
 
           <div class="action-card" style="--delay: 0.2s">
-            <div class="action-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
-              <el-icon><Van /></el-icon>
-            </div>
-            <div class="action-content">
-              <div class="action-title">发货管理</div>
-              <div class="action-desc">处理发货事宜</div>
-            </div>
-            <el-icon class="arrow-icon"><ArrowRight /></el-icon>
-          </div>
-
-          <div class="action-card" style="--delay: 0.3s">
             <div class="action-icon" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
               <el-icon><Service /></el-icon>
             </div>
             <div class="action-content">
               <div class="action-title">售后管理</div>
               <div class="action-desc">处理售后问题</div>
+            </div>
+            <el-icon class="arrow-icon"><ArrowRight /></el-icon>
+          </div>
+
+          <div class="action-card" style="--delay: 0.3s">
+            <div class="action-icon" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+              <el-icon><Management /></el-icon>
+            </div>
+            <div class="action-content">
+              <div class="action-title">行政管理</div>
+              <div class="action-desc">行政事务管理</div>
             </div>
             <el-icon class="arrow-icon"><ArrowRight /></el-icon>
           </div>

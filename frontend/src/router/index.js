@@ -19,6 +19,12 @@ const routes = [
     name: 'Dashboard',
     component: () => import('@/views/dashboard/index.vue'),
     meta: { title: '首页', requiresAuth: true }
+  },
+  {
+    path: '/products',
+    name: 'Products',
+    component: () => import('@/views/products/index.vue'),
+    meta: { title: '商品管理', requiresAuth: true }
   }
 ]
 
