@@ -362,20 +362,8 @@ class GoodsService:
 
         where_clause = " AND ".join(where_conditions)
 
-        # 热销商品查询（包含完整商品信息和库存，避免N+1查询）
-        # 先获取该部门的仓库列表
-        warehouse_ids = []
-        if dept_id:
-            warehouse_query = text("SELECT id FROM warehouse WHERE dept_id = :dept_id")
-            warehouse_results = db.execute(warehouse_query, {"dept_id": dept_id}).fetchall()
-            if warehouse_results:
-                warehouse_ids = [str(w[0]) for w in warehouse_results]
-
-        # 构建仓库筛选条件
-        warehouse_filter = ""
-        if warehouse_ids:
-            warehouse_filter = f" AND i.warehouse_id IN ({','.join(warehouse_ids)})"
-
+        # 热销商品查询（销售数据）
+        # 不JOIN inventory，避免重复累加销售数据
         query = text(f"""
             SELECT
                 g.id as goods_id,
@@ -391,14 +379,12 @@ class GoodsService:
                 g.stop,
                 g.property,
                 b.name as brand_name,
-                COALESCE(SUM(i.count), 0) as stock_quantity,
                 SUM(IF(ou.order_class != 1, oud.curtom_number * -1, oud.curtom_number)) as sales_quantity,
                 SUM(oud.curtom_money) as sales_amount
             FROM order_user_detail oud
             INNER JOIN order_user ou ON oud.pid = ou.id
             INNER JOIN goods g ON oud.goods_id = g.id
             LEFT JOIN brand b ON g.brand_id = b.id
-            LEFT JOIN inventory i ON g.id = i.goods_id AND i.type = 3{warehouse_filter}
             WHERE {where_clause}
             GROUP BY g.id
             HAVING sales_quantity > 0
@@ -408,6 +394,33 @@ class GoodsService:
 
         params["limit"] = limit
         results = db.execute(query, params).fetchall()
+
+        # 获取该部门的仓库列表，用于查询库存
+        warehouse_ids = []
+        if dept_id:
+            warehouse_query = text("SELECT id FROM warehouse WHERE dept_id = :dept_id")
+            warehouse_results = db.execute(warehouse_query, {"dept_id": dept_id}).fetchall()
+            if warehouse_results:
+                warehouse_ids = [w[0] for w in warehouse_results]
+
+        # 获取商品ID列表，用于查询库存
+        goods_ids = [row[0] for row in results]
+
+        # 查询库存（单独查询，避免JOIN导致重复）
+        stock_map = {}
+        if goods_ids:
+            warehouse_filter = ""
+            if warehouse_ids:
+                warehouse_filter = f" AND warehouse_id IN ({','.join(map(str, warehouse_ids))})"
+
+            stock_query = text(f"""
+                SELECT goods_id, COALESCE(SUM(count), 0) as stock_count
+                FROM inventory
+                WHERE goods_id IN ({','.join(map(str, goods_ids))}){warehouse_filter}
+                GROUP BY goods_id
+            """)
+            stock_results = db.execute(stock_query).fetchall()
+            stock_map = {row[0]: int(row[1]) for row in stock_results}
 
         items = []
         for row in results:
@@ -424,9 +437,9 @@ class GoodsService:
             stop = row[10]
             property = row[11] if row[11] else "正常"
             brand_name = row[12]
-            stock_quantity = int(row[13]) if row[13] else 0
-            sales_quantity = int(row[14]) if row[14] else 0
-            sales_amount = float(row[15]) if row[15] else 0
+            sales_quantity = int(row[13]) if row[13] else 0
+            sales_amount = float(row[14]) if row[14] else 0
+            stock_quantity = stock_map.get(goods_id, 0)
 
             items.append({
                 "id": goods_id,
