@@ -970,19 +970,21 @@ const getHistoryTypeName = (type) => {
 // 加载热销商品
 const loadHotGoods = async () => {
   try {
-    const result = await getHotGoods(10)
-    hotProducts.value = result.items.map(item => ({
-      id: item.id,
-      name: item.name,
-      code: item.code,
-      price: item.price,
-      photo: item.photo,
-      material: item.material,
-      fabric: item.fabric,
-      painting: item.painting,
-      size: item.size,
-      stock: item.stock,
-      monthSales: item.month_sales || 0
+    const result = await getHotGoods({ limit: 10 })
+    // 新API直接返回数组
+    const items = Array.isArray(result) ? result : (result.items || [])
+    hotProducts.value = items.map(item => ({
+      id: item.id || item.goods_id,
+      name: item.name || item.goods_name,
+      code: item.code || item.goods_no || item.barcode || '',
+      price: item.price || 0,
+      photo: item.photo || '',
+      material: item.material || '',
+      fabric: item.fabric || '',
+      painting: item.painting || '',
+      size: item.size || '',
+      stock: item.stock || item.stock_quantity || 0,
+      monthSales: item.month_sales || item.sales_quantity || 0
     }))
   } catch (error) {
     console.error('获取热销商品失败', error)
@@ -992,19 +994,21 @@ const loadHotGoods = async () => {
 // 加载滞销商品
 const loadSlowGoods = async () => {
   try {
-    const result = await getSlowGoods(10)
-    slowProducts.value = result.items.map(item => ({
-      id: item.id,
-      name: item.name,
-      code: item.code,
-      price: item.price,
-      photo: item.photo,
-      material: item.material,
-      fabric: item.fabric,
-      painting: item.painting,
-      size: item.size,
-      stock: item.stock,
-      monthSales: item.month_sales || 0
+    const result = await getSlowGoods({ limit: 10 })
+    // 新API直接返回数组
+    const items = Array.isArray(result) ? result : (result.items || [])
+    slowProducts.value = items.map(item => ({
+      id: item.id || item.goods_id,
+      name: item.name || item.goods_name,
+      code: item.code || item.goods_no || item.barcode || '',
+      price: item.price || 0,
+      photo: item.photo || '',
+      material: item.material || '',
+      fabric: item.fabric || '',
+      painting: item.painting || '',
+      size: item.size || '',
+      stock: item.stock || item.stock_quantity || 0,
+      monthSales: item.month_sales || item.sales_quantity || 0
     }))
   } catch (error) {
     console.error('获取滞销商品失败', error)

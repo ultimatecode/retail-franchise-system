@@ -41,25 +41,33 @@ export function getGoodsList(params) {
 
 /**
  * 获取热销商品
- * @param {number} limit - 返回数量，默认10
+ * @param {Object} params - 查询参数
+ * @param {number} params.company_id - 公司ID（可选）
+ * @param {number} params.dept_id - 部门ID（可选）
+ * @param {number} params.limit - 返回数量，默认5
  */
-export function getHotGoods(limit = 10) {
+export function getHotGoods(params = {}) {
+  const { limit = 5, company_id, dept_id } = params
   return request({
     url: '/goods/hot',
     method: 'get',
-    params: { limit }
+    params: { limit, company_id, dept_id }
   })
 }
 
 /**
  * 获取滞销商品
- * @param {number} limit - 返回数量，默认10
+ * @param {Object} params - 查询参数
+ * @param {number} params.company_id - 公司ID（可选）
+ * @param {number} params.dept_id - 部门ID（可选）
+ * @param {number} params.limit - 返回数量，默认3
  */
-export function getSlowGoods(limit = 10) {
+export function getSlowGoods(params = {}) {
+  const { limit = 3, company_id, dept_id } = params
   return request({
     url: '/goods/slow',
     method: 'get',
-    params: { limit }
+    params: { limit, company_id, dept_id }
   })
 }
 

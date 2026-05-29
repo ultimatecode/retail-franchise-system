@@ -315,148 +315,311 @@ class GoodsService:
         }
 
     @staticmethod
-    def get_hot_goods(db: Session, limit: int = 10) -> list:
+    def get_hot_goods(
+        db: Session,
+        company_id: int = None,
+        dept_id: int = None,
+        limit: int = 5
+    ) -> list:
         """
-        获取热销商品（本月销量Top）
+        获取热销商品（当月销量Top）
+        参照PHP逻辑：统计当月销售数量Top5，排除"礼品袋"商品，关联库存
 
         Args:
             db: 数据库会话
+            company_id: 公司ID
+            dept_id: 部门ID
             limit: 返回数量
 
         Returns:
             热销商品列表
         """
-        month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        now = datetime.now()
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(seconds=1)
 
-        query = text("""
+        # 构建查询条件
+        where_conditions = [
+            "ou.type = 1",
+            "ou.status BETWEEN 9 AND 15",
+            "ou.reg_date >= :month_start",
+            "ou.reg_date <= :month_end",
+            "oud.goods_name NOT LIKE :exclude_gift"
+        ]
+        params = {
+            "month_start": int(month_start.timestamp()),
+            "month_end": int(month_end.timestamp()),
+            "exclude_gift": "%礼品袋%"
+        }
+
+        if company_id:
+            where_conditions.append("ou.company_id = :company_id")
+            params["company_id"] = company_id
+
+        if dept_id:
+            where_conditions.append("ou.dept_id = :dept_id")
+            params["dept_id"] = dept_id
+
+        where_clause = " AND ".join(where_conditions)
+
+        # 热销商品查询（包含完整商品信息和库存，避免N+1查询）
+        # 先获取该部门的仓库列表
+        warehouse_ids = []
+        if dept_id:
+            warehouse_query = text("SELECT id FROM warehouse WHERE dept_id = :dept_id")
+            warehouse_results = db.execute(warehouse_query, {"dept_id": dept_id}).fetchall()
+            if warehouse_results:
+                warehouse_ids = [str(w[0]) for w in warehouse_results]
+
+        # 构建仓库筛选条件
+        warehouse_filter = ""
+        if warehouse_ids:
+            warehouse_filter = f" AND i.warehouse_id IN ({','.join(warehouse_ids)})"
+
+        query = text(f"""
             SELECT
-                g.id,
+                g.id as goods_id,
                 g.goods_no,
-                g.name,
+                g.name as goods_name,
                 g.price,
                 g.photo,
                 g.material,
                 g.fabric,
                 g.painting,
                 g.size,
-                COALESCE(SUM(i.count), 0) as stock,
-                COALESCE(SUM(odi.absolute_quantity), 0) as month_sales
-            FROM goods g
-            LEFT JOIN inventory i ON g.id = i.goods_id AND i.type = 3
-            LEFT JOIN order_delivery_item odi ON g.id = odi.goods_id
-            LEFT JOIN order_delivery od ON odi.pid = od.id
-                AND od.status >= 3
-                AND od.create_time >= :month_start
-            WHERE g.show = '1' AND g.stop = 0
+                g.barcode,
+                g.status,
+                b.name as brand_name,
+                COALESCE(SUM(i.count), 0) as stock_quantity,
+                SUM(IF(ou.order_class != 1, oud.curtom_number * -1, oud.curtom_number)) as sales_quantity,
+                SUM(oud.curtom_money) as sales_amount
+            FROM order_user_detail oud
+            INNER JOIN order_user ou ON oud.pid = ou.id
+            INNER JOIN goods g ON oud.goods_id = g.id
+            LEFT JOIN brand b ON g.brand_id = b.id
+            LEFT JOIN inventory i ON g.id = i.goods_id AND i.type = 3{warehouse_filter}
+            WHERE {where_clause}
             GROUP BY g.id
-            HAVING month_sales > 0
-            ORDER BY month_sales DESC
+            HAVING sales_quantity > 0
+            ORDER BY sales_quantity DESC
             LIMIT :limit
         """)
 
-        results = db.execute(query, {
-            "month_start": int(month_start.timestamp()),
-            "limit": limit
-        }).fetchall()
+        params["limit"] = limit
+        results = db.execute(query, params).fetchall()
 
         items = []
         for row in results:
-            # 处理图片 URL
+            goods_id = row[0]
+            goods_no = row[1]
+            goods_name = row[2]
+            price = float(row[3]) if row[3] else 0
             photo = process_image_url(row[4])
+            material = row[5]
+            fabric = row[6]
+            painting = row[7]
+            size = row[8]
+            barcode = row[9] if row[9] else ""
+            raw_status = row[10]
+            brand_name = row[11]
+            stock_quantity = int(row[12]) if row[12] else 0
+            sales_quantity = int(row[13]) if row[13] else 0
+            sales_amount = float(row[14]) if row[14] else 0
+
+            # 映射状态：'通过' -> 'active'，其他 -> 'inactive'
+            status = "active" if raw_status == "通过" else "inactive"
+
             items.append({
-                "id": row[0],
-                "code": row[1],
-                "name": row[2],
-                "price": float(row[3]) if row[3] else 0,
+                "id": goods_id,
+                "code": goods_no,
+                "goods_id": goods_id,
+                "goods_no": goods_no,
+                "goods_name": goods_name,
+                "name": goods_name,
+                "price": price,
                 "photo": photo,
-                "material": row[5],
-                "fabric": row[6],
-                "painting": row[7],
-                "size": row[8],
-                "stock": int(row[9]) if row[9] else 0,
-                "month_sales": int(row[10]) if row[10] else 0
+                "material": material,
+                "fabric": fabric,
+                "painting": painting,
+                "size": size,
+                "barcode": barcode,
+                "status": status,
+                "brand_name": brand_name,
+                "sales_quantity": sales_quantity,
+                "sales_amount": sales_amount,
+                "stock_quantity": stock_quantity,
+                "stock": stock_quantity,
+                "month_sales": sales_quantity
             })
 
         return items
 
     @staticmethod
-    def get_slow_goods(db: Session, limit: int = 10) -> list:
+    def get_slow_goods(
+        db: Session,
+        company_id: int = None,
+        dept_id: int = None,
+        limit: int = 3
+    ) -> list:
         """
-        获取滞销商品（低销量高库存）
+        获取滞销商品（库存>0且入库30天以上，当月无销售）
+        参照PHP逻辑：库存>0，入库时间超过30天，当月无销售记录
 
         Args:
             db: 数据库会话
+            company_id: 公司ID
+            dept_id: 部门ID
             limit: 返回数量
 
         Returns:
             滞销商品列表
         """
-        month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        now = datetime.now()
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(seconds=1)
+        month_end_date = month_end.strftime('%Y-%m-%d')
+        days_30_before = (month_end - timedelta(days=30)).strftime('%Y-%m-%d')
 
-        query = text("""
+        # 获取当月有销售的商品ID列表
+        sales_where = ["ou.type = 1", "ou.status BETWEEN 9 AND 14", "ou.reg_date >= :month_start", "ou.reg_date <= :month_end"]
+        sales_params = {"month_start": int(month_start.timestamp()), "month_end": int(month_end.timestamp())}
+
+        if company_id:
+            sales_where.append("ou.company_id = :company_id")
+            sales_params["company_id"] = company_id
+
+        if dept_id:
+            sales_where.append("ou.dept_id = :dept_id")
+            sales_params["dept_id"] = dept_id
+
+        sales_query = text(f"""
+            SELECT DISTINCT oud.goods_id
+            FROM order_user_detail oud
+            INNER JOIN order_user ou ON oud.pid = ou.id
+            WHERE {' AND '.join(sales_where)}
+        """)
+        sales_results = db.execute(sales_query, sales_params).fetchall()
+        sales_goods_ids = [str(r[0]) for r in sales_results] if sales_results else []
+
+        # 滞销商品查询
+        inventory_where = ["i.count > 0"]
+        inventory_params = {}
+
+        if dept_id:
+            # 获取该部门的所有仓库ID
+            warehouse_query = text("SELECT id FROM warehouse WHERE dept_id = :dept_id")
+            warehouse_results = db.execute(warehouse_query, {"dept_id": dept_id}).fetchall()
+            if warehouse_results:
+                warehouse_ids = [str(w[0]) for w in warehouse_results]
+                inventory_where.append(f"i.warehouse_id IN ({','.join(warehouse_ids)})")
+
+        # 入库时间超过30天
+        inventory_where.append("FROM_UNIXTIME(i.create_date, '%Y-%m-%d') <= :days_30_before")
+        inventory_params["days_30_before"] = days_30_before
+
+        # 排除当月有销售的商品
+        if sales_goods_ids:
+            inventory_where.append(f"i.goods_id NOT IN ({','.join(sales_goods_ids)})")
+
+        query = text(f"""
             SELECT
-                g.id,
+                g.id as goods_id,
                 g.goods_no,
-                g.name,
+                g.name as goods_name,
                 g.price,
                 g.photo,
                 g.material,
                 g.fabric,
                 g.painting,
                 g.size,
-                COALESCE(SUM(i.count), 0) as stock,
-                COALESCE(SUM(odi.absolute_quantity), 0) as month_sales
-            FROM goods g
-            LEFT JOIN inventory i ON g.id = i.goods_id AND i.type = 3
-            LEFT JOIN order_delivery_item odi ON g.id = odi.goods_id
-            LEFT JOIN order_delivery od ON odi.pid = od.id
-                AND od.status >= 3
-                AND od.create_time >= :month_start
-            WHERE g.show = '1' AND g.stop = 0
+                g.barcode,
+                g.status,
+                b.name as brand_name,
+                SUM(i.count) as stock_quantity
+            FROM inventory i
+            INNER JOIN goods g ON i.goods_id = g.id
+            LEFT JOIN brand b ON g.brand_id = b.id
+            WHERE {' AND '.join(inventory_where)}
             GROUP BY g.id
-            HAVING stock > 10 AND (month_sales IS NULL OR month_sales < 5)
-            ORDER BY month_sales ASC
+            ORDER BY stock_quantity DESC
             LIMIT :limit
         """)
 
-        results = db.execute(query, {
-            "month_start": int(month_start.timestamp()),
-            "limit": limit
-        }).fetchall()
+        inventory_params["limit"] = limit
+        results = db.execute(query, inventory_params).fetchall()
 
         items = []
         for row in results:
-            # 处理图片 URL
+            goods_id = row[0]
+            goods_no = row[1]
+            goods_name = row[2]
+            price = float(row[3]) if row[3] else 0
             photo = process_image_url(row[4])
+            material = row[5]
+            fabric = row[6]
+            painting = row[7]
+            size = row[8]
+            barcode = row[9] if row[9] else ""
+            raw_status = row[10]
+            brand_name = row[11]
+            stock_quantity = int(row[12]) if row[12] else 0
+
+            # 映射状态：'通过' -> 'active'，其他 -> 'inactive'
+            status = "active" if raw_status == "通过" else "inactive"
+
             items.append({
-                "id": row[0],
-                "code": row[1],
-                "name": row[2],
-                "price": float(row[3]) if row[3] else 0,
+                "id": goods_id,
+                "code": goods_no,
+                "goods_id": goods_id,
+                "goods_no": goods_no,
+                "goods_name": goods_name,
+                "name": goods_name,
+                "price": price,
                 "photo": photo,
-                "material": row[5],
-                "fabric": row[6],
-                "painting": row[7],
-                "size": row[8],
-                "stock": int(row[9]) if row[9] else 0,
-                "month_sales": int(row[10]) if row[10] else 0
+                "material": material,
+                "fabric": fabric,
+                "painting": painting,
+                "size": size,
+                "barcode": barcode,
+                "status": status,
+                "brand_name": brand_name,
+                "stock_quantity": stock_quantity,
+                "stock": stock_quantity,
+                "sales_quantity": 0,
+                "sales_amount": 0,
+                "month_sales": 0
             })
 
         return items
 
     @staticmethod
-    def get_low_stock_goods(db: Session, threshold: int = 10) -> list:
+    def get_low_stock_goods(db: Session, threshold: int = 10, dept_id: int = None) -> list:
         """
         获取库存预警商品
 
         Args:
             db: 数据库会话
             threshold: 库存阈值
+            dept_id: 部门ID（可选，用于筛选特定仓库）
 
         Returns:
             低库存商品列表
         """
-        query = text("""
+        # 构建WHERE条件
+        where_conditions = ["g.show = '1'", "g.stop = 0"]
+        params = {"threshold": threshold}
+
+        # 如果指定了部门，筛选该部门的仓库
+        if dept_id:
+            warehouse_query = text("SELECT id FROM warehouse WHERE dept_id = :dept_id")
+            warehouse_results = db.execute(warehouse_query, {"dept_id": dept_id}).fetchall()
+            if warehouse_results:
+                warehouse_ids = [str(w[0]) for w in warehouse_results]
+                where_conditions.append(f"i.warehouse_id IN ({','.join(warehouse_ids)})")
+
+        where_clause = " AND ".join(where_conditions)
+
+        query = text(f"""
             SELECT
                 g.id,
                 g.goods_no,
@@ -465,13 +628,13 @@ class GoodsService:
                 COALESCE(SUM(i.count), 0) as stock
             FROM goods g
             LEFT JOIN inventory i ON g.id = i.goods_id AND i.type = 3
-            WHERE g.show = '1' AND g.stop = 0
+            WHERE {where_clause}
             GROUP BY g.id
             HAVING stock < :threshold AND stock >= 0
             ORDER BY stock ASC
         """)
 
-        results = db.execute(query, {"threshold": threshold}).fetchall()
+        results = db.execute(query, params).fetchall()
 
         return [
             {
@@ -485,17 +648,32 @@ class GoodsService:
         ]
 
     @staticmethod
-    def get_inventory_stats(db: Session) -> dict:
+    def get_inventory_stats(db: Session, dept_id: int = None) -> dict:
         """
         获取库存统计信息
 
         Args:
             db: 数据库会话
+            dept_id: 部门ID（可选，用于筛选特定仓库）
 
         Returns:
             库存统计数据
         """
-        query = text("""
+        # 构建WHERE条件
+        where_conditions = ["g.show = '1'"]
+        params = {}
+
+        # 如果指定了部门，筛选该部门的仓库
+        if dept_id:
+            warehouse_query = text("SELECT id FROM warehouse WHERE dept_id = :dept_id")
+            warehouse_results = db.execute(warehouse_query, {"dept_id": dept_id}).fetchall()
+            if warehouse_results:
+                warehouse_ids = [str(w[0]) for w in warehouse_results]
+                where_conditions.append(f"i.warehouse_id IN ({','.join(warehouse_ids)})")
+
+        where_clause = " AND ".join(where_conditions)
+
+        query = text(f"""
             SELECT
                 COUNT(DISTINCT id) as total,
                 SUM(CASE WHEN stock >= 10 THEN 1 ELSE 0 END) as normal,
@@ -507,16 +685,16 @@ class GoodsService:
                     COALESCE(SUM(i.count), 0) as stock
                 FROM goods g
                 LEFT JOIN inventory i ON g.id = i.goods_id AND i.type = 3
-                WHERE g.show = '1'
+                WHERE {where_clause}
                 GROUP BY g.id
             ) goods_with_stock
         """)
 
-        result = db.execute(query).first()
+        result = db.execute(query, params).first()
 
         return {
-            "total": int(result[0]) if result[0] else 0,
-            "normal": int(result[1]) if result[1] else 0,
-            "low": int(result[2]) if result[2] else 0,
-            "out": int(result[3]) if result[3] else 0
+            "total": int(result[0]) if result and result[0] else 0,
+            "normal": int(result[1]) if result and result[1] else 0,
+            "low": int(result[2]) if result and result[2] else 0,
+            "out": int(result[3]) if result and result[3] else 0
         }

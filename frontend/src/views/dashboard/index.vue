@@ -183,6 +183,83 @@
       </div>
     </div>
 
+    <!-- 商品分析区域 -->
+    <div class="goods-analysis-section">
+      <!-- 热销商品 Top5 -->
+      <div class="goods-card">
+        <div class="card-header">
+          <div class="header-left">
+            <span class="card-icon">🔥</span>
+            <span class="card-title">热销商品 Top5</span>
+          </div>
+          <span class="card-subtitle">当月销量排行</span>
+        </div>
+        <div class="goods-list" v-loading="goodsLoading">
+          <div v-if="hotGoods.length === 0" class="empty-state">
+            <el-icon><Goods /></el-icon>
+            <p>暂无数据</p>
+          </div>
+          <div v-else class="goods-item" v-for="(item, index) in hotGoods" :key="item.goods_id">
+            <div class="goods-rank" :class="`rank-${index + 1}`">{{ index + 1 }}</div>
+            <div class="goods-info">
+              <div class="goods-name">{{ item.goods_name }}</div>
+              <div class="goods-meta">
+                <span v-if="item.brand_name" class="brand-tag">{{ item.brand_name }}</span>
+                <span v-if="item.barcode" class="barcode-tag">{{ item.barcode }}</span>
+              </div>
+            </div>
+            <div class="goods-data">
+              <div class="data-item">
+                <span class="data-label">销量</span>
+                <span class="data-value primary">{{ item.sales_quantity }}</span>
+              </div>
+              <div class="data-item">
+                <span class="data-label">库存</span>
+                <span class="data-value" :class="{ 'low': item.stock_quantity < 10 }">{{ item.stock_quantity }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 滞销商品 Top3 -->
+      <div class="goods-card">
+        <div class="card-header">
+          <div class="header-left">
+            <span class="card-icon">📦</span>
+            <span class="card-title">滞销商品 Top3</span>
+          </div>
+          <span class="card-subtitle">库存积压预警</span>
+        </div>
+        <div class="goods-list" v-loading="goodsLoading">
+          <div v-if="slowGoods.length === 0" class="empty-state">
+            <el-icon><Goods /></el-icon>
+            <p>暂无数据</p>
+          </div>
+          <div v-else class="goods-item warning" v-for="(item, index) in slowGoods" :key="item.goods_id">
+            <div class="goods-rank rank-slow">{{ index + 1 }}</div>
+            <div class="goods-info">
+              <div class="goods-name">{{ item.goods_name }}</div>
+              <div class="goods-meta">
+                <span v-if="item.brand_name" class="brand-tag">{{ item.brand_name }}</span>
+                <span v-if="item.barcode" class="barcode-tag">{{ item.barcode }}</span>
+              </div>
+            </div>
+            <div class="goods-data">
+              <div class="data-item">
+                <span class="data-label">库存</span>
+                <span class="data-value warning">{{ item.stock_quantity }}</span>
+              </div>
+              <div class="data-item">
+                <span class="data-label">销量</span>
+                <span class="data-value muted">{{ item.sales_quantity }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 底部退出按钮 -->
     <div class="logout-section">
       <el-button @click="handleLogout" class="logout-btn">
@@ -198,7 +275,23 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { getSalesStats, getMySalesStats } from '@/api/stats'
+import { getHotGoods, getSlowGoods } from '@/api/goods'
 import dayjs from 'dayjs'
+import {
+  ShoppingCart,
+  Calendar,
+  TrendCharts,
+  DataLine,
+  User,
+  Avatar,
+  DataAnalysis,
+  Goods,
+  Document,
+  Service,
+  Management,
+  SwitchButton,
+  ArrowRight
+} from '@element-plus/icons-vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -218,6 +311,15 @@ const personalStats = ref({
   monthSales: 0,
   yearSales: 0
 })
+
+// 热销商品
+const hotGoods = ref([])
+
+// 滞销商品
+const slowGoods = ref([])
+
+// 加载中状态
+const goodsLoading = ref(false)
 
 const currentDate = computed(() => {
   return dayjs().format('YYYY年MM月DD日')
@@ -272,9 +374,41 @@ const handleLogout = () => {
   router.push('/login')
 }
 
+// 加载热销商品
+const loadHotGoods = async () => {
+  try {
+    goodsLoading.value = true
+    console.log('正在加载热销商品...')
+    const data = await getHotGoods({ limit: 5 })
+    console.log('热销商品数据:', data)
+    hotGoods.value = data || []
+  } catch (error) {
+    console.error('获取热销商品失败', error)
+  } finally {
+    goodsLoading.value = false
+  }
+}
+
+// 加载滞销商品
+const loadSlowGoods = async () => {
+  try {
+    goodsLoading.value = true
+    console.log('正在加载滞销商品...')
+    const data = await getSlowGoods({ limit: 3 })
+    console.log('滞销商品数据:', data)
+    slowGoods.value = data || []
+  } catch (error) {
+    console.error('获取滞销商品失败', error)
+  } finally {
+    goodsLoading.value = false
+  }
+}
+
 onMounted(() => {
   loadStats()
   loadPersonalStats()
+  loadHotGoods()
+  loadSlowGoods()
 })
 </script>
 
@@ -562,6 +696,206 @@ onMounted(() => {
   to {
     opacity: 1;
     transform: translateX(0);
+  }
+}
+
+.goods-analysis-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+  margin-bottom: 30px;
+}
+
+.goods-card {
+  background: #fff;
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
+
+  &:hover {
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-icon {
+      font-size: 24px;
+    }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #2c3e50;
+    }
+
+    .card-subtitle {
+      font-size: 13px;
+      color: #999;
+    }
+  }
+
+  .goods-list {
+    min-height: 200px;
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 0;
+      color: #ccc;
+
+      .el-icon {
+        font-size: 48px;
+        margin-bottom: 10px;
+      }
+
+      p {
+        font-size: 14px;
+      }
+    }
+
+    .goods-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border-radius: 12px;
+      margin-bottom: 8px;
+      background: #f8f9fa;
+      transition: all 0.3s ease;
+
+      &:hover {
+        background: #f0f2f5;
+        transform: translateX(5px);
+      }
+
+      &.warning {
+        background: linear-gradient(135deg, #fff5f5 0%, #fff0f0 100%);
+
+        &:hover {
+          background: linear-gradient(135deg, #ffe8e8 0%, #ffe0e0 100%);
+        }
+      }
+
+      .goods-rank {
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 14px;
+        background: #e9ecef;
+        color: #6c757d;
+
+        &.rank-1 {
+          background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+          color: #fff;
+        }
+
+        &.rank-2 {
+          background: linear-gradient(135deg, #c0c0c0 0%, #e0e0e0 100%);
+          color: #fff;
+        }
+
+        &.rank-3 {
+          background: linear-gradient(135deg, #cd7f32 0%, #e8a868 100%);
+          color: #fff;
+        }
+
+        &.rank-slow {
+          background: linear-gradient(135deg, #ff6b6b 0%, #ff8787 100%);
+          color: #fff;
+        }
+      }
+
+      .goods-info {
+        flex: 1;
+        min-width: 0;
+
+        .goods-name {
+          font-size: 14px;
+          font-weight: 500;
+          color: #2c3e50;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          margin-bottom: 4px;
+        }
+
+        .goods-meta {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+
+          .brand-tag,
+          .barcode-tag {
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: #e9ecef;
+            color: #6c757d;
+          }
+
+          .brand-tag {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            color: #1976d2;
+          }
+        }
+      }
+
+      .goods-data {
+        display: flex;
+        gap: 16px;
+
+        .data-item {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+
+          .data-label {
+            font-size: 11px;
+            color: #999;
+            margin-bottom: 2px;
+          }
+
+          .data-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: #2c3e50;
+
+            &.primary {
+              color: #667eea;
+            }
+
+            &.warning {
+              color: #ff6b6b;
+            }
+
+            &.muted {
+              color: #adb5bd;
+            }
+
+            &.low {
+              color: #faad14;
+            }
+          }
+        }
+      }
+    }
   }
 }
 

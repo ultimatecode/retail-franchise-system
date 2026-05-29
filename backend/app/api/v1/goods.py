@@ -1,10 +1,11 @@
 """商品相关 API"""
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import Optional
 
 from app.core.database import get_db
-from app.schemas.goods import GoodsStock, GoodsListResponse
+from app.schemas.goods import GoodsStock, GoodsListResponse, HotSalesProduct, SlowMovingProduct
 from app.services.goods_service import GoodsService
 from app.api.deps import get_current_user
 
@@ -91,40 +92,94 @@ def get_goods_list(
     return GoodsListResponse(**result)
 
 
-@router.get("/hot", summary="获取热销商品")
+@router.get("/hot", summary="获取热销商品", response_model=list[HotSalesProduct])
 def get_hot_goods(
-    limit: int = Query(10, ge=1, le=50, description="返回数量"),
+    company_id: Optional[int] = Query(None, description="公司ID"),
+    dept_id: Optional[int] = Query(None, description="部门ID"),
+    limit: int = Query(5, ge=1, le=50, description="返回数量"),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
     """
-    获取热销商品（按本月销量排序）
+    获取热销商品（当月销量Top）
 
-    - **limit**: 返回商品数量，默认10条
+    参照原PHP逻辑：
+    - 统计当月销售数量 Top5
+    - 排除"礼品袋"商品
+    - 关联品牌和库存信息
+    - 处理退货（order_class != 1 时数量取负）
+
+    - **company_id**: 公司ID（可选）
+    - **dept_id**: 部门ID（可选，用于筛选特定仓库）
+    - **limit**: 返回商品数量，默认5条
+
+    权限说明：
+    - 管理员可以查看所有部门的数据
+    - 非管理员只能查看本部门的数据
     """
-    result = GoodsService.get_hot_goods(db, limit)
-    return {
-        "total": len(result),
-        "items": result
-    }
+    # 获取用户的dept_id和is_admin
+    actual_dept_id = dept_id
+    is_admin = False
+
+    if current_user.user_class == "E":
+        employee = db.execute(
+            text("SELECT dept_id, admin FROM employee WHERE user_id = :uid"),
+            {"uid": current_user.id}
+        ).first()
+
+        if employee:
+            is_admin = employee[1] == 1
+            # 只有非管理员才限制部门
+            if not is_admin and not dept_id:
+                actual_dept_id = employee[0]
+
+    result = GoodsService.get_hot_goods(db, company_id, actual_dept_id, limit)
+    return result
 
 
-@router.get("/slow", summary="获取滞销商品")
+@router.get("/slow", summary="获取滞销商品", response_model=list[SlowMovingProduct])
 def get_slow_goods(
-    limit: int = Query(10, ge=1, le=50, description="返回数量"),
+    company_id: Optional[int] = Query(None, description="公司ID"),
+    dept_id: Optional[int] = Query(None, description="部门ID"),
+    limit: int = Query(3, ge=1, le=50, description="返回数量"),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
     """
-    获取滞销商品（低销量且库存充足）
+    获取滞销商品（库存>0且入库30天以上，当月无销售）
 
-    - **limit**: 返回商品数量，默认10条
+    参照原PHP逻辑：
+    - 库存数量 > 0
+    - 入库时间超过 30 天
+    - 当月无销售记录
+    - 按库存数量降序排列
+
+    - **company_id**: 公司ID（可选）
+    - **dept_id**: 部门ID（可选，用于筛选特定仓库）
+    - **limit**: 返回商品数量，默认3条
+
+    权限说明：
+    - 管理员可以查看所有部门的数据
+    - 非管理员只能查看本部门的数据
     """
-    result = GoodsService.get_slow_goods(db, limit)
-    return {
-        "total": len(result),
-        "items": result
-    }
+    # 获取用户的dept_id和is_admin
+    actual_dept_id = dept_id
+    is_admin = False
+
+    if current_user.user_class == "E":
+        employee = db.execute(
+            text("SELECT dept_id, admin FROM employee WHERE user_id = :uid"),
+            {"uid": current_user.id}
+        ).first()
+
+        if employee:
+            is_admin = employee[1] == 1
+            # 只有非管理员才限制部门
+            if not is_admin and not dept_id:
+                actual_dept_id = employee[0]
+
+    result = GoodsService.get_slow_goods(db, company_id, actual_dept_id, limit)
+    return result
 
 
 @router.get("/low-stock", summary="获取库存预警商品")
@@ -137,8 +192,26 @@ def get_low_stock_goods(
     获取库存预警商品（库存低于阈值）
 
     - **threshold**: 库存预警阈值，默认10
+
+    权限说明：
+    - 管理员可以查看所有部门的数据
+    - 非管理员只能查看本部门的数据
     """
-    result = GoodsService.get_low_stock_goods(db, threshold)
+    # 获取用户的dept_id
+    dept_id = None
+    if current_user.user_class == "E":
+        employee = db.execute(
+            text("SELECT dept_id, admin FROM employee WHERE user_id = :uid"),
+            {"uid": current_user.id}
+        ).first()
+
+        if employee:
+            is_admin = employee[1] == 1
+            # 只有非管理员才限制部门
+            if not is_admin:
+                dept_id = employee[0]
+
+    result = GoodsService.get_low_stock_goods(db, threshold, dept_id)
     return {
         "total": len(result),
         "items": result
@@ -154,5 +227,23 @@ def get_inventory_stats(
     获取库存统计信息
 
     返回商品总数、库存充足/不足/缺货数量
+
+    权限说明：
+    - 管理员可以查看所有部门的统计
+    - 非管理员只能查看本部门的统计
     """
-    return GoodsService.get_inventory_stats(db)
+    # 获取用户的dept_id
+    dept_id = None
+    if current_user.user_class == "E":
+        employee = db.execute(
+            text("SELECT dept_id, admin FROM employee WHERE user_id = :uid"),
+            {"uid": current_user.id}
+        ).first()
+
+        if employee:
+            is_admin = employee[1] == 1
+            # 只有非管理员才限制部门
+            if not is_admin:
+                dept_id = employee[0]
+
+    return GoodsService.get_inventory_stats(db, dept_id)

@@ -59,3 +59,51 @@ class GoodsQueryParams(BaseModel):
     goods_class: Optional[str] = None
     page: int = 1
     page_size: int = 20
+
+
+class HotSalesProduct(BaseModel):
+    """热销商品 Schema"""
+    id: int
+    code: Optional[str] = None
+    goods_id: int
+    goods_no: Optional[str] = None
+    goods_name: str
+    name: Optional[str] = None
+    price: Optional[float] = None
+    photo: Optional[str] = None
+    material: Optional[str] = None
+    fabric: Optional[str] = None
+    painting: Optional[str] = None
+    size: Optional[str] = None
+    barcode: Optional[str] = None
+    brand_name: Optional[str] = None
+    sales_quantity: int
+    sales_amount: float
+    stock_quantity: int
+    stock: Optional[int] = None
+    month_sales: Optional[int] = None
+    status: Optional[str] = None
+
+
+class SlowMovingProduct(BaseModel):
+    """滞销商品 Schema"""
+    id: int
+    code: Optional[str] = None
+    goods_id: int
+    goods_no: Optional[str] = None
+    goods_name: str
+    name: Optional[str] = None
+    price: Optional[float] = None
+    photo: Optional[str] = None
+    material: Optional[str] = None
+    fabric: Optional[str] = None
+    painting: Optional[str] = None
+    size: Optional[str] = None
+    barcode: Optional[str] = None
+    brand_name: Optional[str] = None
+    stock_quantity: int
+    stock: Optional[int] = None
+    sales_quantity: int = 0
+    sales_amount: float = 0
+    month_sales: Optional[int] = None
+    status: Optional[str] = None
