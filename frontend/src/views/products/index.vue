@@ -63,7 +63,7 @@
         <div class="search-box">
           <el-input
             v-model="searchText"
-            placeholder="请输入商品编码或名称..."
+            placeholder="请输入商品规格、编码或名称..."
             clearable
             @keyup.enter="handleSearch"
           >
@@ -79,14 +79,14 @@
       <div v-if="selectedProduct" class="product-detail">
         <div class="detail-card">
           <div class="detail-image">
-            <img :src="selectedProduct.image || '/placeholder.png'" :alt="selectedProduct.name" />
+            <img :src="selectedProduct.photo || '/placeholder.png'" :alt="selectedProduct.name" />
             <div class="detail-status" :class="selectedProduct.status">
               {{ selectedProduct.status === 'active' ? '在售' : '已下架' }}
             </div>
           </div>
           <div class="detail-info">
             <h2 class="detail-name">{{ selectedProduct.name }}</h2>
-            <div class="detail-code">编码：{{ selectedProduct.code }}</div>
+            <div class="detail-code">规格：{{ selectedProduct.material || '-' }} / {{ selectedProduct.fabric || '-' }} / {{ selectedProduct.painting || '-' }} / {{ selectedProduct.size || '-' }}</div>
             <div class="detail-grid">
               <div class="grid-item">
                 <div class="item-label">价格</div>
@@ -129,7 +129,9 @@
               <div class="item-rank">{{ index + 1 }}</div>
               <div class="item-info">
                 <div class="item-name">{{ product.name }}</div>
-                <div class="item-code">{{ product.code }}</div>
+                <div class="item-spec">
+                  {{ product.material || '-' }} / {{ product.fabric || '-' }} / {{ product.painting || '-' }} / {{ product.size || '-' }}
+                </div>
               </div>
               <div class="item-price">¥{{ product.price }}</div>
               <div class="item-stock" :class="getStockClass(product.stock)">
@@ -162,7 +164,9 @@
             >
               <div class="item-info">
                 <div class="item-name">{{ product.name }}</div>
-                <div class="item-code">{{ product.code }}</div>
+                <div class="item-spec">
+                  {{ product.material || '-' }} / {{ product.fabric || '-' }} / {{ product.painting || '-' }} / {{ product.size || '-' }}
+                </div>
               </div>
               <div class="item-price">¥{{ product.price }}</div>
               <div class="item-stock" :class="getStockClass(product.stock)">
@@ -179,11 +183,11 @@
 
       <div v-if="!selectedProduct && !searchText" class="welcome-state">
         <div class="welcome-icon">📦</div>
-        <div class="welcome-title">请输入商品编码查询</div>
+        <div class="welcome-title">请输入商品规格查询</div>
         <div class="welcome-desc">或点击下方商品查看详情</div>
       </div>
 
-      <div v-if="searchText && !selectedProduct" class="no-result">
+      <div v-if="hasSearched && searchText && !selectedProduct" class="no-result">
         <div class="no-result-text">未找到商品</div>
       </div>
     </div>
@@ -198,7 +202,7 @@
           </div>
           <div class="stat-content">
             <div class="stat-label">商品总数</div>
-            <div class="stat-value">{{ products.length }}</div>
+            <div class="stat-value">{{ inventoryStats.total }}</div>
           </div>
         </div>
         <div class="stat-card">
@@ -207,7 +211,7 @@
           </div>
           <div class="stat-content">
             <div class="stat-label">库存充足</div>
-            <div class="stat-value">{{ products.filter(p => p.stock >= 10).length }}</div>
+            <div class="stat-value">{{ inventoryStats.normal }}</div>
           </div>
         </div>
         <div class="stat-card">
@@ -216,7 +220,7 @@
           </div>
           <div class="stat-content">
             <div class="stat-label">库存不足</div>
-            <div class="stat-value">{{ products.filter(p => p.stock > 0 && p.stock < 10).length }}</div>
+            <div class="stat-value">{{ inventoryStats.low }}</div>
           </div>
         </div>
         <div class="stat-card">
@@ -225,7 +229,7 @@
           </div>
           <div class="stat-content">
             <div class="stat-label">已缺货</div>
-            <div class="stat-value">{{ products.filter(p => p.stock === 0).length }}</div>
+            <div class="stat-value">{{ inventoryStats.out }}</div>
           </div>
         </div>
       </div>
@@ -579,10 +583,12 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { getGoodsByCode, getGoodsList, getHotGoods, getSlowGoods, getLowStockGoods, getInventoryStats } from '@/api/goods'
 
 const currentTab = ref('query')
 const searchText = ref('')
 const selectedProduct = ref(null)
+const hasSearched = ref(false)  // 标记是否已执行查询
 
 // 库存列表相关
 const inventorySearch = ref('')
@@ -623,37 +629,34 @@ const stockOutForm = ref({
   items: []
 })
 
-// 商品数据
-const products = ref([
-  { id: 1, name: '可口可乐 500ml', code: 'P001', category_id: 2, price: 3.50, stock: 120, status: 'active', monthSales: 156 },
-  { id: 2, name: '百事可乐 500ml', code: 'P002', category_id: 2, price: 3.50, stock: 98, status: 'active', monthSales: 89 },
-  { id: 3, name: '农夫山泉 550ml', code: 'P003', category_id: 2, price: 2.00, stock: 8, status: 'active', monthSales: 203 },
-  { id: 4, name: '康师傅红烧牛肉面', code: 'P004', category_id: 1, price: 4.50, stock: 0, status: 'active', monthSales: 23 },
-  { id: 5, name: '乐事薯片', code: 'P005', category_id: 1, price: 8.00, stock: 45, status: 'active', monthSales: 12 },
-  { id: 6, name: '奥利奥饼干', code: 'P006', category_id: 1, price: 12.00, stock: 35, status: 'active', monthSales: 3 }
-])
+// 商品数据（从API获取）
+const products = ref([])
 
-// 热销商品（月销量Top10）
-const hotProducts = computed(() => {
-  return products.value
-    .filter(p => p.status === 'active' && p.monthSales > 10)
-    .sort((a, b) => b.monthSales - a.monthSales)
-    .slice(0, 10)
+// 热销商品
+const hotProducts = ref([])
+
+// 滞销商品
+const slowProducts = ref([])
+
+// 库存预警商品
+const lowStockProducts = ref([])
+
+// 库存统计
+const inventoryStats = ref({
+  total: 0,
+  normal: 0,
+  low: 0,
+  out: 0
 })
 
-// 滞销商品（月销量低于5件且库存超过10件）
-const slowProducts = computed(() => {
-  return products.value
-    .filter(p => p.status === 'active' && p.monthSales < 5 && p.stock > 10)
-    .sort((a, b) => a.monthSales - b.monthSales)
-})
+// 热销商品（月销量Top10）- 兼容旧代码
+const hotProductsComputed = computed(() => hotProducts.value)
 
-// 库存预警商品（库存低于10件）
-const lowStockProducts = computed(() => {
-  return products.value
-    .filter(p => p.status === 'active' && p.stock < 10)
-    .sort((a, b) => a.stock - b.stock)
-})
+// 滞销商品（月销量低于5件且库存超过10件）- 兼容旧代码
+const slowProductsComputed = computed(() => slowProducts.value)
+
+// 库存预警商品（库存低于10件）- 兼容旧代码
+const lowStockProductsComputed = computed(() => lowStockProducts.value)
 
 // 选择商品并跳转到查询页
 const selectProduct = (product) => {
@@ -708,17 +711,40 @@ const getStockClass = (stock) => {
 }
 
 // 搜索商品
-const handleSearch = () => {
-  if (!searchText.value.trim()) return
+const handleSearch = async () => {
+  if (!searchText.value.trim()) {
+    ElMessage.warning('请输入商品规格、编码或名称')
+    return
+  }
 
-  const product = products.value.find(p =>
-    p.code === searchText.value.trim() ||
-    p.name.includes(searchText.value.trim())
-  )
+  hasSearched.value = true  // 标记已执行查询
 
-  if (product) {
-    selectedProduct.value = product
-  } else {
+  try {
+    const result = await getGoodsByCode(searchText.value.trim())
+    selectedProduct.value = {
+      id: result.id,
+      name: result.name,
+      code: result.code || result.goods_no,
+      barcode: result.barcode,
+      category_id: result.category_id,
+      category_name: result.category_name,
+      goods_class: result.goods_class,
+      price: result.price,
+      cost_price: result.cost_price,
+      photo: result.photo,
+      material: result.material,
+      fabric: result.fabric,
+      painting: result.painting,
+      size: result.size,
+      stop: result.stop,
+      show: result.show,
+      status: result.status === '通过' ? 'active' : 'inactive',
+      property: result.property,
+      remark: result.remark,
+      stock: result.stock,
+      monthSales: result.month_sales || 0
+    }
+  } catch (error) {
     selectedProduct.value = null
     ElMessage.warning('未找到商品')
   }
@@ -941,8 +967,84 @@ const getHistoryTypeName = (type) => {
   return nameMap[type] || type
 }
 
-onMounted(() => {
-  // 初始化
+// 加载热销商品
+const loadHotGoods = async () => {
+  try {
+    const result = await getHotGoods(10)
+    hotProducts.value = result.items.map(item => ({
+      id: item.id,
+      name: item.name,
+      code: item.code,
+      price: item.price,
+      photo: item.photo,
+      material: item.material,
+      fabric: item.fabric,
+      painting: item.painting,
+      size: item.size,
+      stock: item.stock,
+      monthSales: item.month_sales || 0
+    }))
+  } catch (error) {
+    console.error('获取热销商品失败', error)
+  }
+}
+
+// 加载滞销商品
+const loadSlowGoods = async () => {
+  try {
+    const result = await getSlowGoods(10)
+    slowProducts.value = result.items.map(item => ({
+      id: item.id,
+      name: item.name,
+      code: item.code,
+      price: item.price,
+      photo: item.photo,
+      material: item.material,
+      fabric: item.fabric,
+      painting: item.painting,
+      size: item.size,
+      stock: item.stock,
+      monthSales: item.month_sales || 0
+    }))
+  } catch (error) {
+    console.error('获取滞销商品失败', error)
+  }
+}
+
+// 加载库存预警商品
+const loadLowStockGoods = async () => {
+  try {
+    const result = await getLowStockGoods(10)
+    lowStockProducts.value = result.items.map(item => ({
+      id: item.id,
+      name: item.name,
+      code: item.code,
+      price: item.price,
+      stock: item.stock
+    }))
+  } catch (error) {
+    console.error('获取库存预警商品失败', error)
+  }
+}
+
+// 加载库存统计
+const loadInventoryStats = async () => {
+  try {
+    const result = await getInventoryStats()
+    inventoryStats.value = result
+  } catch (error) {
+    console.error('获取库存统计失败', error)
+  }
+}
+
+onMounted(async () => {
+  // 加载商品数据
+  await Promise.all([
+    loadHotGoods(),
+    loadSlowGoods(),
+    loadLowStockGoods(),
+    loadInventoryStats()
+  ])
 })
 </script>
 

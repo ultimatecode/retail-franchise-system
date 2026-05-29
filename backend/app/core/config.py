@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     REDIS_DB: int = 0
     REDIS_PASSWORD: str = ""
 
+    # 图片服务器
+    IMAGE_BASE_URL: str = "https://img.amb.cab"  # 图片服务器基础URL
+
     # 密码加密配置（兼容旧系统）
     PWD_KEY_BEGIN: str = "sunmy_begin"
     PWD_KEY_END: str = "sunmy_end"
