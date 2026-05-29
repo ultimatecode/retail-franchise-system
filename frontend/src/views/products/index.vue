@@ -983,6 +983,7 @@ const loadHotGoods = async () => {
       fabric: item.fabric || '',
       painting: item.painting || '',
       size: item.size || '',
+      status: item.status || 'inactive',
       stock: item.stock || item.stock_quantity || 0,
       monthSales: item.month_sales || item.sales_quantity || 0
     }))
@@ -1007,6 +1008,7 @@ const loadSlowGoods = async () => {
       fabric: item.fabric || '',
       painting: item.painting || '',
       size: item.size || '',
+      status: item.status || 'inactive',
       stock: item.stock || item.stock_quantity || 0,
       monthSales: item.month_sales || item.sales_quantity || 0
     }))
