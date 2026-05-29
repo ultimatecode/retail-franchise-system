@@ -388,7 +388,8 @@ class GoodsService:
                 g.painting,
                 g.size,
                 g.barcode,
-                g.status,
+                g.stop,
+                g.property,
                 b.name as brand_name,
                 COALESCE(SUM(i.count), 0) as stock_quantity,
                 SUM(IF(ou.order_class != 1, oud.curtom_number * -1, oud.curtom_number)) as sales_quantity,
@@ -420,14 +421,12 @@ class GoodsService:
             painting = row[7]
             size = row[8]
             barcode = row[9] if row[9] else ""
-            raw_status = row[10]
-            brand_name = row[11]
-            stock_quantity = int(row[12]) if row[12] else 0
-            sales_quantity = int(row[13]) if row[13] else 0
-            sales_amount = float(row[14]) if row[14] else 0
-
-            # 映射状态：'通过' -> 'active'，其他 -> 'inactive'
-            status = "active" if raw_status == "通过" else "inactive"
+            stop = row[10]
+            property = row[11] if row[11] else "正常"
+            brand_name = row[12]
+            stock_quantity = int(row[13]) if row[13] else 0
+            sales_quantity = int(row[14]) if row[14] else 0
+            sales_amount = float(row[15]) if row[15] else 0
 
             items.append({
                 "id": goods_id,
@@ -443,7 +442,8 @@ class GoodsService:
                 "painting": painting,
                 "size": size,
                 "barcode": barcode,
-                "status": status,
+                "stop": stop,
+                "property": property,
                 "brand_name": brand_name,
                 "sales_quantity": sales_quantity,
                 "sales_amount": sales_amount,
@@ -533,7 +533,8 @@ class GoodsService:
                 g.painting,
                 g.size,
                 g.barcode,
-                g.status,
+                g.stop,
+                g.property,
                 b.name as brand_name,
                 SUM(i.count) as stock_quantity
             FROM inventory i
@@ -560,12 +561,10 @@ class GoodsService:
             painting = row[7]
             size = row[8]
             barcode = row[9] if row[9] else ""
-            raw_status = row[10]
-            brand_name = row[11]
-            stock_quantity = int(row[12]) if row[12] else 0
-
-            # 映射状态：'通过' -> 'active'，其他 -> 'inactive'
-            status = "active" if raw_status == "通过" else "inactive"
+            stop = row[10]
+            property = row[11] if row[11] else "正常"
+            brand_name = row[12]
+            stock_quantity = int(row[13]) if row[13] else 0
 
             items.append({
                 "id": goods_id,
@@ -581,7 +580,8 @@ class GoodsService:
                 "painting": painting,
                 "size": size,
                 "barcode": barcode,
-                "status": status,
+                "stop": stop,
+                "property": property,
                 "brand_name": brand_name,
                 "stock_quantity": stock_quantity,
                 "stock": stock_quantity,

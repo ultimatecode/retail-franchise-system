@@ -80,8 +80,8 @@
         <div class="detail-card">
           <div class="detail-image">
             <img :src="selectedProduct.photo || '/placeholder.png'" :alt="selectedProduct.name" />
-            <div class="detail-status" :class="selectedProduct.status">
-              {{ selectedProduct.status === 'active' ? '在售' : '已下架' }}
+            <div class="detail-status" :class="{ stopped: selectedProduct.stop === 1 }">
+              {{ selectedProduct.stop === 1 ? '停产' : (selectedProduct.property !== '正常' ? selectedProduct.property : '在售') }}
             </div>
           </div>
           <div class="detail-info">
@@ -292,8 +292,8 @@
           <el-table-column prop="monthSales" label="月销" width="80" />
           <el-table-column label="状态" width="80">
             <template #default="{ row }">
-              <el-tag :type="row.status === 'active' ? 'success' : 'info'">
-                {{ row.status === 'active' ? '在售' : '下架' }}
+              <el-tag :type="row.stop === 1 ? 'danger' : (row.property !== '正常' ? 'warning' : 'success')">
+                {{ row.stop === 1 ? '停产' : (row.property !== '正常' ? row.property : '在售') }}
               </el-tag>
             </template>
           </el-table-column>
@@ -983,7 +983,8 @@ const loadHotGoods = async () => {
       fabric: item.fabric || '',
       painting: item.painting || '',
       size: item.size || '',
-      status: item.status || 'inactive',
+      stop: item.stop || 0,
+      property: item.property || '正常',
       stock: item.stock || item.stock_quantity || 0,
       monthSales: item.month_sales || item.sales_quantity || 0
     }))
@@ -1008,7 +1009,8 @@ const loadSlowGoods = async () => {
       fabric: item.fabric || '',
       painting: item.painting || '',
       size: item.size || '',
-      status: item.status || 'inactive',
+      stop: item.stop || 0,
+      property: item.property || '正常',
       stock: item.stock || item.stock_quantity || 0,
       monthSales: item.month_sales || item.sales_quantity || 0
     }))

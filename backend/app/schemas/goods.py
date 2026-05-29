@@ -82,7 +82,8 @@ class HotSalesProduct(BaseModel):
     stock_quantity: int
     stock: Optional[int] = None
     month_sales: Optional[int] = None
-    status: Optional[str] = None
+    stop: Optional[int] = None
+    property: Optional[str] = None
 
 
 class SlowMovingProduct(BaseModel):
@@ -106,4 +107,5 @@ class SlowMovingProduct(BaseModel):
     sales_quantity: int = 0
     sales_amount: float = 0
     month_sales: Optional[int] = None
-    status: Optional[str] = None
+    stop: Optional[int] = None
+    property: Optional[str] = None
