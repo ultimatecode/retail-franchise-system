@@ -583,7 +583,10 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useUserStore } from '@/stores/user'
 import { getGoodsByCode, getGoodsList, getHotGoods, getSlowGoods, getLowStockGoods, getInventoryStats } from '@/api/goods'
+
+const userStore = useUserStore()
 
 const currentTab = ref('query')
 const searchText = ref('')
@@ -970,7 +973,7 @@ const getHistoryTypeName = (type) => {
 // 加载热销商品
 const loadHotGoods = async () => {
   try {
-    const result = await getHotGoods({ limit: 10 })
+    const result = await getHotGoods({ limit: 10, dept_id: userStore.deptId })
     // 新API直接返回数组
     const items = Array.isArray(result) ? result : (result.items || [])
     hotProducts.value = items.map(item => ({
@@ -996,7 +999,7 @@ const loadHotGoods = async () => {
 // 加载滞销商品
 const loadSlowGoods = async () => {
   try {
-    const result = await getSlowGoods({ limit: 10 })
+    const result = await getSlowGoods({ limit: 10, dept_id: userStore.deptId })
     // 新API直接返回数组
     const items = Array.isArray(result) ? result : (result.items || [])
     slowProducts.value = items.map(item => ({

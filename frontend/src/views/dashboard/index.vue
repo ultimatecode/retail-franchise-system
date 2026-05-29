@@ -379,7 +379,7 @@ const loadHotGoods = async () => {
   try {
     goodsLoading.value = true
     console.log('正在加载热销商品...')
-    const data = await getHotGoods({ limit: 5 })
+    const data = await getHotGoods({ limit: 5, dept_id: userStore.deptId })
     console.log('热销商品数据:', data)
     hotGoods.value = data || []
   } catch (error) {
@@ -394,7 +394,7 @@ const loadSlowGoods = async () => {
   try {
     goodsLoading.value = true
     console.log('正在加载滞销商品...')
-    const data = await getSlowGoods({ limit: 3 })
+    const data = await getSlowGoods({ limit: 3, dept_id: userStore.deptId })
     console.log('滞销商品数据:', data)
     slowGoods.value = data || []
   } catch (error) {
